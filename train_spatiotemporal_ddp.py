@@ -1,81 +1,59 @@
 import os
-import argparse
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
-from torch.utils.data import Dataset
-from torchvision import transforms
-from torch.cuda.amp import GradScaler, autocast
 
-class RandomWindowDataset(Dataset):
-    def __init__(self, data, window_size):
-        self.data = data
-        self.window_size = window_size
+# Initialize distributed training environment
+def init_process(rank, world_size):
+    os.environ['LOCAL_RANK'] = str(rank)
+    dist.init_process_group('nccl', rank=rank, world_size=world_size)
+    torch.cuda.set_device(rank)
 
-    def __len__(self):
-        return len(self.data) - self.window_size + 1
+# Model definition - TODO: Plug in the actual model
+class MyModel(nn.Module):
+    def __init__(self):
+        super(MyModel, self).__init__()
+        # TODO: Define model architecture here
 
-    def __getitem__(self, idx):
-        return self.data[idx:idx + self.window_size]
+    def forward(self, x):
+        # TODO: Implement forward pass
+        return x
 
-def load_data(csv_files):
-    data = []
-    for file in csv_files:
-        df = pd.read_csv(file)
-        data.append(df.values)
-    return np.concatenate(data)
+# Main training function
+def train(rank, world_size):
+    init_process(rank, world_size)
+    model = MyModel().to(rank)
+    model = DistributedDataParallel(model, device_ids=[rank])
 
-def build_knn_graph(data):
-    # Implementation for building KNN graph
-    pass
+    # Define MSE Loss
+    criterion = nn.MSELoss()  # Placeholder for actual criterion
 
-def normalize_data(data):
-    return (data - np.mean(data)) / np.std(data)
+    # Prepare dataset and DataLoader - TODO: Plug in the actual dataset
+    dataset = []  # TODO: Replace with actual dataset
+dataloader = DataLoader(dataset, sampler=DistributedSampler(dataset), batch_size=32)
 
-def main(args):
-    # Setup for distributed training
-    torch.distributed.init_process_group(backend='nccl')
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Training loop
+    for epoch in range(10):  # TODO: Set the number of epochs
+        sampler.set_epoch(epoch)
+        for batch in dataloader:
+            inputs, targets = batch
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
 
-    # Load and prepare the data
-    data = load_data(args.csv_files)
-    data = normalize_data(data)
-    dataset = RandomWindowDataset(data, args.window_size)
-    sampler = DistributedSampler(dataset)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, sampler=sampler)
+            # Backpropagation
+            loss.backward()
+            optimizer.step()
 
-    # Model initialization
-    model = SpatioTemporalTransformer()  # This should be defined
-    model.to(device)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scaler = GradScaler()
-
-    for epoch in range(args.epochs):
-        model.train()
-        for step, batch in enumerate(dataloader):
-            with autocast():
-                outputs = model(batch.to(device))
-                loss = criterion(outputs)  # Define criterion
-            optimizer.zero_grad()  
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            if step >= args.max_train_steps_per_epoch:
-                break
-
-    # Save the model
-    if args.save_model:
-        torch.save(model.state_dict(), 'best_model.pth')
+            # Save checkpoints on rank0 only
+            if rank == 0:
+                # TODO: Implement saving logic here
+                pass
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train SpatioTemporal model with DDP')
-    parser.add_argument('--csv_files', nargs='+', help='Input CSV files')
-    parser.add_argument('--window_size', type=int, default=10, help='Size of sliding window')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
-    parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--max_train_steps_per_epoch', type=int, default=100, help='Max steps per epoch')
-    parser.add_argument('--save_model', action='store_true', help='Save the model after training')
-    args = parser.parse_args()
-    main(args)
+    world_size = torch.cuda.device_count()
+    mp.spawn(train, args=(world_size,), nprocs=world_size, join=True)
