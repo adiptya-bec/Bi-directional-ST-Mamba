@@ -725,7 +725,16 @@ def run_inference(
 
     if checkpoint_path and os.path.exists(checkpoint_path):
         print(f"  Loading checkpoint: {checkpoint_path}")
-        ckpt = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
+        # Try safe loading first; fall back to full unpickling for
+        # checkpoints that contain non-tensor objects (e.g. history dicts).
+        try:
+            ckpt = torch.load(
+                checkpoint_path, map_location=DEVICE, weights_only=True
+            )
+        except Exception:
+            ckpt = torch.load(
+                checkpoint_path, map_location=DEVICE, weights_only=False
+            )
         state = ckpt.get("model_state", ckpt)
         model.load_state_dict(state)
         print("  ✔ Checkpoint loaded successfully.")
