@@ -256,7 +256,9 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train SpatioTemporal model with DDP')
-    parser.add_argument('--csv_files', nargs='+', help='Input CSV files')
+    parser.add_argument('--csv_files', nargs='+',
+                        default=[CONFIG["pressure_csv"], CONFIG["u_velocity_csv"], CONFIG["v_velocity_csv"]],
+                        help='Input CSV files')
     parser.add_argument('--window_size', type=int, default=10, help='Size of sliding window')
     parser.add_argument('--batch_size', type=int, default=CONFIG["batch_size"], help='Batch size')
     parser.add_argument('--epochs', type=int, default=CONFIG["epochs"], help='Number of training epochs')
