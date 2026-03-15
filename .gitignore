@@ -1,4 +1,5 @@
 inference_outputs/
+inference_outputs_v2/
 checkpoints/
 outputs/
 __pycache__/
