@@ -1,5 +1,6 @@
 inference_outputs/
 inference_outputs_v2/
+inference_outputs_lstm_transformer_v2/
 checkpoints/
 outputs/
 __pycache__/
