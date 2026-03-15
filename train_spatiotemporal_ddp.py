@@ -43,6 +43,7 @@ CONFIG = {
     "patience": 10,
     "grad_clip": 0.5,
     "loss_weights": {"pressure": 0.3, "u_velocity": 0.35, "v_velocity": 0.35},
+    "lambda_spatial_smooth": 0.1,
 
     # Speed optimizations
     "use_amp": True,
@@ -81,27 +82,30 @@ class SpatioTemporalDataset(Dataset):
     Sliding-window dataset for spatiotemporal flow forecasting.
 
     Each sample contains:
-      - center_seq   : (seq_len, 3)     — the target cell's P/U/V history
-      - neighbor_seq : (seq_len, k, 3)  — its k neighbors' P/U/V history
-      - target       : (pred_steps, 3)  — ground truth future values
+      - center_seq      : (seq_len, 3)        — the target cell's P/U/V history
+      - neighbor_seq    : (seq_len, k, 3)     — its k neighbors' P/U/V history
+      - target          : (pred_steps, 3)     — ground truth future values
+      - neighbor_targets: (k, pred_steps, 3)  — ground truth future values for neighbors
+      - neighbor_dists  : (k,)                — spatial distances to each neighbor
     """
 
-    def __init__(self, data_normalized, neighbor_indices, seq_length, pred_steps,
-                 start_t, end_t, device=None, preload_to_gpu=False,
-                 cache_neighbors=False, cache_neighbors_device="cuda",
-                 cache_vram_fraction=0.70):
+    def __init__(self, data_normalized, neighbor_indices, neighbor_distances,
+                 seq_length, pred_steps, start_t, end_t, device=None,
+                 preload_to_gpu=False, cache_neighbors=False,
+                 cache_neighbors_device="cuda", cache_vram_fraction=0.70):
         """
         Parameters
         ----------
-        data_normalized  : np.ndarray, shape (n_cells, n_timesteps, 3)
-        neighbor_indices : np.ndarray, shape (n_cells, k)
-        seq_length       : int
-        pred_steps       : int
-        start_t          : int — inclusive start of valid time range
-        end_t            : int — exclusive end of valid time range
-        device           : torch.device
-        preload_to_gpu   : bool
-        cache_neighbors  : bool
+        data_normalized    : np.ndarray, shape (n_cells, n_timesteps, 3)
+        neighbor_indices   : np.ndarray, shape (n_cells, k)
+        neighbor_distances : np.ndarray, shape (n_cells, k)
+        seq_length         : int
+        pred_steps         : int
+        start_t            : int — inclusive start of valid time range
+        end_t              : int — exclusive end of valid time range
+        device             : torch.device
+        preload_to_gpu     : bool
+        cache_neighbors    : bool
         cache_neighbors_device : "cuda" or "cpu"
         cache_vram_fraction    : float (max fraction of VRAM for cache)
         """
@@ -110,13 +114,16 @@ class SpatioTemporalDataset(Dataset):
 
         data_tensor = torch.FloatTensor(data_normalized)
         nbr_tensor = torch.LongTensor(neighbor_indices)
+        dist_tensor = torch.FloatTensor(neighbor_distances)
 
         if preload_to_gpu and device is not None:
             data_tensor = data_tensor.to(device)
             nbr_tensor = nbr_tensor.to(device)
+            dist_tensor = dist_tensor.to(device)
 
         self.data = data_tensor
         self.neighbor_indices = nbr_tensor
+        self.neighbor_distances = dist_tensor
         self.seq_length = seq_length
         self.pred_steps = pred_steps
         self.start_t = start_t
@@ -164,7 +171,14 @@ class SpatioTemporalDataset(Dataset):
                            t_start + self.seq_length:
                            t_start + self.seq_length + self.pred_steps, :]
 
-        return center_seq, neighbor_seq, target
+        nbr_indices = self.neighbor_indices[cell_idx]
+        neighbor_targets = self.data[nbr_indices,
+                                     t_start + self.seq_length:
+                                     t_start + self.seq_length + self.pred_steps, :]
+
+        neighbor_dists = self.neighbor_distances[cell_idx]
+
+        return center_seq, neighbor_seq, target, neighbor_targets, neighbor_dists
 
 
 def load_data(csv_files):
@@ -186,19 +200,207 @@ def build_knn_graph(coords, k):
 
     Returns
     -------
-    neighbor_indices : np.ndarray, shape (n_cells, k)
+    neighbor_indices   : np.ndarray, shape (n_cells, k)
+    neighbor_distances : np.ndarray, shape (n_cells, k)
     """
     print(f"Building kNN graph with k={k} ...")
     tree = cKDTree(coords)
     # Query k+1 because the first result is the point itself
-    _, indices = tree.query(coords, k=k + 1)
-    neighbor_indices = indices[:, 1:]  # exclude self
+    distances, indices = tree.query(coords, k=k + 1)
+    neighbor_indices = indices[:, 1:]    # exclude self
+    neighbor_distances = distances[:, 1:]
     print(f"  neighbor_indices shape: {neighbor_indices.shape}")
-    return neighbor_indices
+    return neighbor_indices, neighbor_distances
 
 
 def normalize_data(data):
     return (data - np.mean(data)) / np.std(data)
+
+
+# ── Distance-Weighted Spatial Encoder ────────────────────────────────────────
+class DistanceWeightedSpatialEncoder(nn.Module):
+    """
+    Encodes k-nearest-neighbor flow variables into a spatial embedding using
+    distance-weighted aggregation instead of naive mean-pooling.
+
+    A learned distance-scaling network determines effective neighbor weights so
+    that closer neighbors contribute more to the spatial representation, preserving
+    spatial gradient information across the mesh.
+    """
+
+    def __init__(self, input_features=3, embed_dim=64):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(input_features, embed_dim),
+            nn.ReLU(),
+            nn.Linear(embed_dim, embed_dim),
+        )
+        self.dist_scale = nn.Sequential(
+            nn.Linear(1, 16),
+            nn.ReLU(),
+            nn.Linear(16, 1),
+            nn.Softplus(),
+        )
+
+    def forward(self, neighbor_seq, neighbor_dists):
+        # neighbor_seq   : (B, seq_len, k, input_features)
+        # neighbor_dists : (B, k)
+        embedded = self.mlp(neighbor_seq)               # (B, seq_len, k, embed_dim)
+        d = neighbor_dists.unsqueeze(-1)                # (B, k, 1)
+        raw_w = self.dist_scale(d)                      # (B, k, 1)
+        inv_w = 1.0 / (raw_w + 1e-6)                   # closer → larger weight
+        weights = inv_w / (inv_w.sum(dim=1, keepdim=True) + 1e-8)  # (B, k, 1)
+        weights = weights.unsqueeze(1)                  # (B, 1, k, 1)
+        pooled = (embedded * weights).sum(dim=2)        # (B, seq_len, embed_dim)
+        return pooled
+
+
+# ── Model Definitions ─────────────────────────────────────────────────────────
+class SpatioTemporalLSTM(nn.Module):
+    """
+    Spatiotemporal LSTM:
+      1. DistanceWeightedSpatialEncoder aggregates neighbor features → spatial embedding
+      2. Concatenate center-cell features with spatial embedding
+      3. LSTM processes the combined sequence
+      4. Decoder MLP maps last hidden state → (pred_steps, 3)
+    """
+
+    def __init__(self, input_features=3, spatial_embed_dim=64, hidden_size=256,
+                 num_layers=3, pred_steps=15, dropout=0.2):
+        super().__init__()
+        self.pred_steps = pred_steps
+        self.input_features = input_features
+        self.spatial_encoder = DistanceWeightedSpatialEncoder(input_features, spatial_embed_dim)
+        combined_dim = input_features + spatial_embed_dim
+        self.lstm = nn.LSTM(
+            combined_dim, hidden_size, num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0,
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size // 2, pred_steps * input_features),
+        )
+
+    def forward(self, center_seq, neighbor_seq, neighbor_dists):
+        spatial_embed = self.spatial_encoder(neighbor_seq, neighbor_dists)
+        combined = torch.cat([center_seq, spatial_embed], dim=-1)
+        lstm_out, _ = self.lstm(combined)
+        last_hidden = lstm_out[:, -1, :]
+        output = self.decoder(last_hidden)
+        return output.view(-1, self.pred_steps, self.input_features)
+
+
+class SpatioTemporalTransformer(nn.Module):
+    """
+    Spatiotemporal Transformer:
+      1. DistanceWeightedSpatialEncoder aggregates neighbor features → spatial embedding
+      2. Concatenate center-cell features with spatial embedding
+      3. Linear projection to d_model + learned positional encoding
+      4. Transformer encoder processes the sequence
+      5. Decoder MLP maps last-position output → (pred_steps, 3)
+    """
+
+    def __init__(self, input_features=3, spatial_embed_dim=64, d_model=256,
+                 nhead=8, num_layers=3, pred_steps=15, dropout=0.2):
+        super().__init__()
+        self.pred_steps = pred_steps
+        self.input_features = input_features
+        self.spatial_encoder = DistanceWeightedSpatialEncoder(input_features, spatial_embed_dim)
+        combined_dim = input_features + spatial_embed_dim
+        self.input_projection = nn.Linear(combined_dim, d_model)
+        self.pos_encoding = nn.Parameter(torch.randn(1, 512, d_model))
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=nhead,
+            dim_feedforward=d_model * 4, dropout=dropout, batch_first=True,
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.decoder = nn.Sequential(
+            nn.Linear(d_model, d_model // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model // 2, pred_steps * input_features),
+        )
+
+    def forward(self, center_seq, neighbor_seq, neighbor_dists):
+        spatial_embed = self.spatial_encoder(neighbor_seq, neighbor_dists)
+        combined = torch.cat([center_seq, spatial_embed], dim=-1)
+        x = self.input_projection(combined)
+        seq_len = x.shape[1]
+        x = x + self.pos_encoding[:, :seq_len, :]
+        x = self.transformer_encoder(x)
+        last_output = x[:, -1, :]
+        output = self.decoder(last_output)
+        return output.view(-1, self.pred_steps, self.input_features)
+
+
+def create_model(cfg):
+    """Factory function — create model by name."""
+    model_type = cfg["model_type"]
+    pred_steps = cfg["prediction_horizon_steps"]
+    spatial_embed_dim = cfg["spatial_embed_dim"]
+    hidden_size = cfg["hidden_size"]
+    num_layers = cfg["num_layers"]
+    dropout = cfg["dropout"]
+
+    if model_type == "SpatioTemporalLSTM":
+        model = SpatioTemporalLSTM(
+            input_features=3,
+            spatial_embed_dim=spatial_embed_dim,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            pred_steps=pred_steps,
+            dropout=dropout,
+        )
+    elif model_type == "SpatioTemporalTransformer":
+        model = SpatioTemporalTransformer(
+            input_features=3,
+            spatial_embed_dim=spatial_embed_dim,
+            d_model=hidden_size,
+            nhead=cfg["nhead"],
+            num_layers=num_layers,
+            pred_steps=pred_steps,
+            dropout=dropout,
+        )
+    else:
+        raise ValueError(
+            f"Unknown model_type: '{model_type}'. "
+            "Choose 'SpatioTemporalLSTM' or 'SpatioTemporalTransformer'."
+        )
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Created {model_type} with {n_params:,} trainable parameters.")
+    return model
+
+
+# ── Spatial Smoothness Loss ───────────────────────────────────────────────────
+def spatial_smoothness_loss(
+    predictions: torch.Tensor,
+    neighbor_targets: torch.Tensor,
+    neighbor_dists: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Penalizes large prediction differences between a cell and its spatial neighbors.
+
+    Weights discrepancies by proximity so that closer neighbors contribute more
+    to the regularization signal, encouraging smooth pressure gradients.
+
+    Parameters
+    ----------
+    predictions      : (B, pred_steps, 3)     — model outputs for center cells
+    neighbor_targets : (B, k, pred_steps, 3)  — ground truth future for each neighbor
+    neighbor_dists   : (B, k)                 — spatial distances to each neighbor
+
+    Returns
+    -------
+    loss : scalar tensor
+    """
+    diff_sq = (predictions.unsqueeze(1) - neighbor_targets) ** 2   # (B, k, pred_steps, 3)
+    inv_d = 1.0 / (neighbor_dists + 1e-6)                          # (B, k)
+    weights = inv_d / (inv_d.sum(dim=1, keepdim=True) + 1e-8)      # (B, k), normalized
+    weights = weights.unsqueeze(-1).unsqueeze(-1)                   # (B, k, 1, 1)
+    return (diff_sq * weights).sum(dim=1).mean()
 
 
 def main(args):
@@ -209,9 +411,14 @@ def main(args):
     # Load and prepare the data
     data = load_data(args.csv_files)
     data = normalize_data(data)
+
+    # Build kNN graph — returns both indices and distances
+    neighbor_indices, neighbor_distances = build_knn_graph(data[:, :2], CONFIG["k_neighbors"])
+
     dataset = SpatioTemporalDataset(
         data_normalized=data,
-        neighbor_indices=build_knn_graph(data[:, :2], CONFIG["k_neighbors"]),
+        neighbor_indices=neighbor_indices,
+        neighbor_distances=neighbor_distances,
         seq_length=CONFIG["input_sequence_length"],
         pred_steps=CONFIG["prediction_horizon_steps"],
         start_t=0,
@@ -232,17 +439,30 @@ def main(args):
     )
 
     # Model initialization
-    model = SpatioTemporalTransformer()  # This should be defined
+    model = create_model(CONFIG)
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scaler = GradScaler()
 
+    mse_criterion = nn.MSELoss()
+    lambda_smooth = CONFIG["lambda_spatial_smooth"]
+
     for epoch in range(args.epochs):
         model.train()
         for step, batch in enumerate(dataloader):
+            center_seq, neighbor_seq, target, neighbor_targets, neighbor_dists = batch
+            center_seq = center_seq.to(device)
+            neighbor_seq = neighbor_seq.to(device)
+            target = target.to(device)
+            neighbor_targets = neighbor_targets.to(device)
+            neighbor_dists = neighbor_dists.to(device)
+
             with autocast(enabled=CONFIG["use_amp"]):
-                outputs = model(batch.to(device))
-                loss = criterion(outputs)  # Define criterion
+                outputs = model(center_seq, neighbor_seq, neighbor_dists)
+                mse_loss = mse_criterion(outputs, target)
+                smooth_loss = spatial_smoothness_loss(outputs, neighbor_targets, neighbor_dists)
+                loss = mse_loss + lambda_smooth * smooth_loss
+
             optimizer.zero_grad()
             scaler.scale(loss).backward()
             scaler.step(optimizer)
