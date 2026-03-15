@@ -259,8 +259,8 @@ class DistanceWeightedSpatialEncoder(nn.Module):
 class SpatioTemporalLSTM(nn.Module):
     """
     Spatiotemporal LSTM:
-      1. DistanceWeightedSpatialEncoder aggregates neighbour features → spatial embedding
-      2. Concatenate centre-cell features with spatial embedding
+      1. DistanceWeightedSpatialEncoder aggregates neighbor features → spatial embedding
+      2. Concatenate center-cell features with spatial embedding
       3. LSTM processes the combined sequence
       4. Decoder MLP maps last hidden state → (pred_steps, 3)
     """
@@ -296,8 +296,8 @@ class SpatioTemporalLSTM(nn.Module):
 class SpatioTemporalTransformer(nn.Module):
     """
     Spatiotemporal Transformer:
-      1. DistanceWeightedSpatialEncoder aggregates neighbour features → spatial embedding
-      2. Concatenate centre-cell features with spatial embedding
+      1. DistanceWeightedSpatialEncoder aggregates neighbor features → spatial embedding
+      2. Concatenate center-cell features with spatial embedding
       3. Linear projection to d_model + learned positional encoding
       4. Transformer encoder processes the sequence
       5. Decoder MLP maps last-position output → (pred_steps, 3)
@@ -381,10 +381,10 @@ def spatial_smoothness_loss(
     neighbor_dists: torch.Tensor,
 ) -> torch.Tensor:
     """
-    Penalises large prediction differences between a cell and its spatial neighbours.
+    Penalizes large prediction differences between a cell and its spatial neighbors.
 
-    Weights discrepancies by proximity so that closer neighbours contribute more
-    to the regularisation signal, encouraging smooth pressure gradients.
+    Weights discrepancies by proximity so that closer neighbors contribute more
+    to the regularization signal, encouraging smooth pressure gradients.
 
     Parameters
     ----------
@@ -398,7 +398,7 @@ def spatial_smoothness_loss(
     """
     diff_sq = (predictions.unsqueeze(1) - neighbor_targets) ** 2   # (B, k, pred_steps, 3)
     inv_d = 1.0 / (neighbor_dists + 1e-6)                          # (B, k)
-    weights = inv_d / (inv_d.sum(dim=1, keepdim=True) + 1e-8)      # (B, k), normalised
+    weights = inv_d / (inv_d.sum(dim=1, keepdim=True) + 1e-8)      # (B, k), normalized
     weights = weights.unsqueeze(-1).unsqueeze(-1)                   # (B, k, 1, 1)
     return (diff_sq * weights).sum(dim=1).mean()
 
