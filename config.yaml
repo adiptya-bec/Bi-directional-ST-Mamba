@@ -1,0 +1,120 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  CFD Forecasting Pipeline — Corrected Configuration
+#  Deep-assessment fixes applied (all 12 changes from technical report)
+# ══════════════════════════════════════════════════════════════════════════════
+
+pipeline:
+  case: 2
+  output_dir: "outputs/case_2"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+data:
+  # HDF5 file containing pressure (p), x-velocity (u), y-velocity (v) fields
+  # Shape expected: (N_cells, T_total) per variable
+  hdf5_path: null           # override at runtime
+  coords_path: null         # (N_cells, 2) coordinate array
+  n_cells: null             # set automatically from data
+  total_steps: 1000
+  dt: 0.000222              # time step in seconds (1 / 4500 s per step)
+  shedding_freq_hz: 45.0    # dominant vortex shedding frequency
+
+# ── Train / predict split ─────────────────────────────────────────────────────
+split:
+  train_steps: 300
+  predict_steps: 700        # = total_steps - train_steps
+
+# ── POD Compression (Change 2: Rank Truncation) ──────────────────────────────
+pod:
+  ranks:
+    p: 30    # 99.9% energy at r=25; add 5 for margin
+    u: 50    # 99.9% energy at r=43; add 7 for margin
+    v: 30    # 99.9% energy at r=29; add 1 for margin
+  # latent_dim = 30+50+30 = 110  (was 450 with r=150 each)
+  energy_threshold: 0.999   # informational; actual rank set above
+  use_tke_weighting: true   # weight snapshots by turbulent kinetic energy
+  # Change 5: Active Domain Restriction
+  active_domain:
+    enabled: true
+    tke_fraction: 0.01      # include cells with TKE > 1% of max TKE
+  pressure_outlier_percentile: 2.5  # clip pressure outliers beyond ±2.5%
+
+# ── Preprocessing (Change 3: Remove Solid Masking) ───────────────────────────
+preprocessing:
+  solid_masking:
+    enabled: false          # DISABLED — no solid body in this all-fluid domain
+    vel_thresh: 0.1         # legacy threshold (m/s); unused when enabled=false
+
+# ── Model (Change 7: Reduced Model Size) ────────────────────────────────────
+model:
+  type: "TransformerROM_Lite"
+  d_model: 128              # was 384 (25.2M params); now 128 (~200K params)
+  n_layers: 2               # was 6; now 2
+  n_heads: 8
+  dropout: 0.1
+  ff_mult: 4                # feed-forward multiplier
+
+# ── Prediction horizon (Change 1: Nyquist Fix) ───────────────────────────────
+prediction:
+  pred_horizon: 1           # CRITICAL FIX: was 50 (Nyquist violation)
+                            # shedding period = 2 steps → max horizon = 1
+  rollout_steps: 700        # total steps to forecast via iterative rollout
+  context_length: 150       # input window length for the model
+
+# ── Training (Change 9: Extended Training + Early Stopping) ──────────────────
+training:
+  epochs: 500               # was 100; extended for convergence
+  batch_size: 32
+  lr: 3.0e-4
+  lr_min: 1.0e-6
+  lr_scheduler: "cosine_with_restarts"
+  T_0: 50                   # cosine restart period (epochs)
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  use_amp: true             # mixed-precision
+  early_stopping:
+    enabled: true
+    patience: 50            # stop if amplitude_loss doesn't improve for 50 epochs
+    monitor: "amplitude_loss"
+    min_delta: 0.001
+
+# ── Loss (Change 8: Adaptive Loss Reweighting) ───────────────────────────────
+loss:
+  weighted_mse_weight: 1.0
+  amplitude_weight: 0.5
+  tke_amplitude_weight: 0.5
+  adaptive_reweight:
+    enabled: true
+    plateau_patience: 10    # epochs of weighted_mse plateau before shifting
+    plateau_threshold: 0.01 # relative improvement threshold
+    amplitude_boost: 2.0    # multiply amplitude weight on plateau detection
+
+# ── Inference (Change 4: Iterative One-Step Rollout) ─────────────────────────
+inference:
+  mode: "iterative_rollout" # FIXED: was direct 50-step prediction
+  # "iterative_rollout": autoregressively applies 1-step model
+  # "direct":            predict pred_horizon steps at once (legacy)
+
+# ── Metrics (Change 10: Phase-Aware & Spectral Metrics) ──────────────────────
+metrics:
+  compute_rel_err: true
+  compute_phase: true           # phase error via cross-correlation
+  compute_amplitude: true       # amplitude preservation ratio
+  compute_spectral: true        # PSD spectrum comparison
+  compute_strouhal: true        # Strouhal number error
+  strouhal_reference_hz: 45.0
+
+# ── Logging (Change 12: Comprehensive Experiment Logging) ────────────────────
+logging:
+  log_dir: "logs"
+  save_metadata: true
+  save_truncation_log: true
+  save_energy_summary: true
+  save_loss_components: true
+  save_mode_weights: true
+
+# ── Validation (Change 11: Configuration Validation) ────────────────────────
+validation:
+  check_nyquist: true
+  check_param_ratio: true   # warn if params/samples > 100
+  check_pod_energy: true
+  max_param_sample_ratio: 1000  # warn threshold
