@@ -71,9 +71,9 @@ def amplitude_loss(
     if pred.shape[1] < window:
         window = pred.shape[1]
 
-    # Unfold along time dimension: (B, n_windows, window, D)
-    pred_unf = pred.unfold(1, window, 1)     # (B, n_win, D, window) ← note dim order
-    tgt_unf = target.unfold(1, window, 1)
+    # Unfold along time dimension: (B, n_win, D, window) — unfold places window dim last
+    pred_unf = pred.unfold(1, window, 1)     # (B, n_win, D, window)
+    tgt_unf = target.unfold(1, window, 1)    # (B, n_win, D, window)
 
     # RMS over window dimension
     pred_rms = pred_unf.pow(2).mean(dim=-1).sqrt()  # (B, n_win, D)

@@ -220,7 +220,7 @@ def shedding_frequency_diagnostic(
     peak_idx = int(np.argmax(power[1:]) + 1)
     peak_freq = float(freq[peak_idx])
     shedding_period_s = 1.0 / (peak_freq + 1e-12)
-    shedding_period_steps = shedding_period_s / (dt + 1e-30)
+    shedding_period_steps = shedding_period_s / dt
     recommended_max = max(1, int(shedding_period_steps / 2) - 1)
 
     print(f"\nShedding frequency diagnostic  var={var_label}  mode={mode_idx} ...")

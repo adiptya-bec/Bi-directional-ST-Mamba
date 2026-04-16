@@ -368,7 +368,7 @@ class ComprehensiveEvaluator:
         print(f"  Evaluation Report — {model_name}")
         print(f"{'='*60}")
         print(f"  RelErr        : {metrics.get('rel_err', float('nan')):.4f}  "
-              f"({'PASS ✓' if metrics.get('rel_err', 2) < 1.0 else 'FAIL ✗ (> 1 = worse than mean)'})")
+              f"({'PASS ✓' if metrics.get('rel_err', float('inf')) < 1.0 else 'FAIL ✗ (> 1 = worse than mean)'})")
         print(f"  MSE           : {metrics.get('mse', float('nan')):.4e}")
         print(f"  RMSE          : {metrics.get('rmse', float('nan')):.4e}")
 

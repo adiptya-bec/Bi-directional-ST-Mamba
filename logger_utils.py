@@ -114,7 +114,7 @@ class ExperimentLogger:
             "cum_energy_at_r": float(cum_energy_at_r),
             "n_active_cells": int(n_active_cells),
             "n_total_cells": int(n_total_cells),
-            "active_fraction": float(n_active_cells / (n_total_cells + 1e-10)),
+            "active_fraction": float(n_active_cells / n_total_cells),
         }
         self._truncation_log.append(entry)
 

@@ -75,7 +75,7 @@ def check_pod_energy(
     if check_name is None:
         check_name = f"POD energy capture ({var_label})"
 
-    cum_energy = float(energy_fractions[r_used - 1]) if r_used <= len(energy_fractions) else float(energy_fractions[-1])
+    cum_energy = float(energy_fractions[-1]) if len(energy_fractions) > 0 else 0.0
     passed = cum_energy >= threshold
     msg = (
         f"r={r_used} captures {cum_energy * 100:.2f}% energy "

@@ -230,7 +230,7 @@ def pod_encode(X: np.ndarray, pod: Dict) -> np.ndarray:
     mean = pod["mean"]
     phi_w = pod["phi_w"]   # (N_active, r)
 
-    if hasattr(pod, "__contains__") and "tke_weights" in pod:
+    if "tke_weights" in pod:
         w = pod["tke_weights"][active_mask]
         w = w / (w.sum() + 1e-12)
         w_sqrt = np.sqrt(w)[:, None]

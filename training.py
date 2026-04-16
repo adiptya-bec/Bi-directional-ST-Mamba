@@ -314,7 +314,7 @@ def train_model(
         history["epoch"].append(epoch + 1)
 
         # Save best model
-        if not (vl_loss != vl_loss) and vl_loss < best_val_loss:  # not nan check
+        if not np.isnan(vl_loss) and vl_loss < best_val_loss:
             best_val_loss = vl_loss
             best_state = copy.deepcopy(model.state_dict())
             if checkpoint_dir is not None:
@@ -349,7 +349,7 @@ def train_model(
 
         # Early stopping check (Change 9)
         monitor_val = vl_amp if monitor_key == "amplitude_loss" else vl_loss
-        if monitor_val is not None and not (isinstance(monitor_val, float) and monitor_val != monitor_val):  # not nan
+        if monitor_val is not None and not np.isnan(monitor_val):
             if es.step(monitor_val, epoch):
                 print(
                     f"  Early stopping at epoch {epoch+1} "

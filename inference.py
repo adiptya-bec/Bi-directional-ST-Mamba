@@ -79,7 +79,7 @@ def inference_iterative_rollout(
         # Handle different output shapes
         if isinstance(out, (tuple, list)):
             out = out[0]
-        out_np = out.squeeze(0).cpu().float().numpy()  # (1, D) or (D,)
+        out_np = out.squeeze(0).cpu().numpy()  # (1, D) or (D,)  — model outputs fp32
         if out_np.ndim == 2:
             z_next = out_np[0]   # take first (and only) predicted step
         else:
