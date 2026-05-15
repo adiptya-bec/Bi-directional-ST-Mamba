@@ -1,0 +1,13 @@
+flowchart TD
+    IN[Input z_ctx\n(B, L, d_z)] --> IP[Input projection\nLinear d_z -> d_model]
+    IP --> MB1[Mamba block 1\nSSM/Mamba + Residual + LayerNorm]
+    MB1 --> MBN[Mamba block N\nstacked depth]
+    FB{{mamba_ssm available?}} -->|yes| CORE[Mamba layer]
+    FB -->|no| S4[_S4LiteLayer fallback]
+    CORE --> MB1
+    S4 --> MB1
+    MBN --> LAST[Select final temporal state\n(B, d_model)]
+    LAST --> MLP[MLP decoder\nLinear -> GELU -> Linear\noutputs H*d_z]
+    MLP --> OUT[Reshape forecast\n(B, H=pred_horizon, d_z)]
+    NOTE[[Training + inference:\nnon-autoregressive direct multi-step output]]
+    OUT --> NOTE

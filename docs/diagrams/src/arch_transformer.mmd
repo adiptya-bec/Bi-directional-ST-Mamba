@@ -1,0 +1,11 @@
+flowchart TD
+    IN[Input z_ctx\n(B, L, d_z)] --> IP[Input projection\nLinear d_z -> d_model]
+    IP --> PE[Temporal positional encoding\nfor context length L]
+    PE --> ENC[Transformer encoder stack\n(Self-Attn + FFN + Residual + LayerNorm)]
+    Q[Prediction queries / target tokens\n(B, H=pred_horizon, d_model)] --> DPE[Decoder positional encoding]
+    DPE --> DEC[Transformer decoder stack\nMasked Self-Attn + Cross-Attn to encoder\n+ FFN + Residual + LayerNorm]
+    ENC -->|memory| DEC
+    DEC --> HEAD[Output projection\nLinear d_model -> d_z]
+    HEAD --> OUT[Forecast z_hat\n(B, H, d_z)]
+    NOTE[[Training + inference:\nnon-autoregressive direct multi-step output]]
+    OUT --> NOTE

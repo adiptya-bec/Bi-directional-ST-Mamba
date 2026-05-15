@@ -1,0 +1,11 @@
+flowchart TD
+    IN[Input z_ctx\n(B, L, d_z)] --> IP[Input projection\nLinear d_z -> d_model]
+    IP --> ENC[LSTM encoder stack\nnum_layers, hidden=d_model]
+    ENC --> STATE[Last state h_L, c_L]
+    STATE --> ST[Learned start token\n(B, 1, d_model)]
+    ST --> DEC[LSTM decoder stack\ninitialized with encoder state]
+    STATE -.init.-> DEC
+    DEC --> HEAD[Output projection\nLinear d_model -> d_z]
+    HEAD --> OUT[Forecast z_hat\n(B, H=pred_horizon, d_z)]
+    NOTE[[Training + inference:\nnon-autoregressive direct multi-step output]]
+    OUT --> NOTE

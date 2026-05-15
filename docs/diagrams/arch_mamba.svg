@@ -1,0 +1,38 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='820' viewBox='0 0 1280 820'>
+<style>text{font-family:Arial,sans-serif;fill:#111} .t{font-size:28px;font-weight:700} .b{font-size:19px} .s{font-size:17px;fill:#2f2f2f} .box{fill:#f8fbff;stroke:#2b5d87;stroke-width:2;rx:14;ry:14} .note{fill:#fff7e6;stroke:#c08b2f;stroke-width:2;rx:12;ry:12}</style>
+<text x='40' y='52' class='t'>MambaForecaster architecture</text>
+<rect x='20' y='120' width='180' height='90' class='box'/>
+<text x='34' y='150' class='b'>Input</text>
+<text x='34' y='174' class='s'>(B, L, d_z)</text>
+<rect x='230' y='120' width='200' height='90' class='box'/>
+<text x='244' y='150' class='b'>Input projection</text>
+<text x='244' y='174' class='s'>Linear d_z → d_model</text>
+<rect x='460' y='120' width='250' height='90' class='box'/>
+<text x='474' y='150' class='b'>Mamba block stack</text>
+<text x='474' y='174' class='s'>SSM + residual + LayerNorm</text>
+<rect x='740' y='120' width='230' height='90' class='box'/>
+<text x='754' y='150' class='b'>Backend selection</text>
+<text x='754' y='174' class='s'>mamba_ssm or _S4LiteLayer</text>
+<rect x='1000' y='120' width='240' height='90' class='box'/>
+<text x='1014' y='150' class='b'>MLP decoder</text>
+<text x='1014' y='174' class='s'>Linear/GELU/Linear</text>
+<text x='1014' y='198' class='s'>produces H*d_z</text>
+<rect x='355' y='280' width='560' height='90' class='box'/>
+<text x='369' y='310' class='b'>Output</text>
+<text x='369' y='334' class='s'>reshape to (B, H=pred_horizon, d_z)</text>
+<rect x='220' y='420' width='840' height='110' class='note'/>
+<text x='234' y='450' class='b'>Training/inference behavior</text>
+<text x='234' y='474' class='s'>Direct multi-step non-autoregressive prediction of full horizon</text>
+<line x1='200' y1='165.0' x2='230' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='220,159.0 230,165.0 220,171.0' fill='#1e4d74'/>
+<line x1='430' y1='165.0' x2='460' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='450,159.0 460,165.0 450,171.0' fill='#1e4d74'/>
+<line x1='710' y1='165.0' x2='740' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='730,159.0 740,165.0 730,171.0' fill='#1e4d74'/>
+<line x1='970' y1='165.0' x2='1000' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='990,159.0 1000,165.0 990,171.0' fill='#1e4d74'/>
+<line x1='1240' y1='165.0' x2='355' y2='325.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='345,319.0 355,325.0 345,331.0' fill='#1e4d74'/>
+<line x1='915' y1='325.0' x2='220' y2='475.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='210,469.0 220,475.0 210,481.0' fill='#1e4d74'/>
+</svg>
