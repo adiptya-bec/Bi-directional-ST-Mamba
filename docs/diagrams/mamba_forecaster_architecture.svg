@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1380" height="760" viewBox="0 0 1380 760">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2b2d42"/>
+    </marker>
+    <style>
+      .title{font:700 30px Arial; fill:#0b132b}
+      .box{stroke:#1b263b; stroke-width:2; rx:14; ry:14}
+      .txt{font:600 18px Arial; fill:#0b132b}
+      .shape{font:500 15px Arial; fill:#1d3557}
+      .small{font:500 14px Arial; fill:#3d5a80}
+      .arrow{stroke:#2b2d42; stroke-width:2.5; fill:none; marker-end:url(#arrow)}
+    </style>
+  </defs>
+
+  <text x="40" y="54" class="title">MambaForecaster Architecture</text>
+
+  <rect x="40" y="120" width="240" height="120" class="box" fill="#e3f2fd"/>
+  <text x="62" y="165" class="txt">Input sequence</text>
+  <text x="62" y="191" class="shape">x ∈ ℝ[B, T_in, d_in]</text>
+
+  <rect x="320" y="100" width="280" height="160" class="box" fill="#e8f5e9"/>
+  <text x="346" y="150" class="txt">Input stem</text>
+  <text x="346" y="176" class="small">Linear(d_in → d_model)</text>
+  <text x="346" y="201" class="small">+ LayerNorm</text>
+  <text x="346" y="226" class="shape">h ∈ ℝ[B, T_in, d_model]</text>
+
+  <rect x="640" y="80" width="420" height="220" class="box" fill="#fff8e1"/>
+  <text x="666" y="130" class="txt">N-layer Mamba block stack</text>
+  <text x="666" y="156" class="small">for l = 1..N:</text>
+  <text x="666" y="181" class="small">u = LN(h)</text>
+  <text x="666" y="206" class="small">h = h + MambaBlock_l(u)</text>
+  <text x="666" y="231" class="small">(selective SSM + local conv mixing)</text>
+  <text x="666" y="256" class="shape">h ∈ ℝ[B, T_in, d_model]</text>
+
+  <rect x="1100" y="120" width="230" height="120" class="box" fill="#fce4ec"/>
+  <text x="1122" y="165" class="txt">Last token readout</text>
+  <text x="1122" y="191" class="shape">h_last = h[:, -1, :] ∈ ℝ[B, d_model]</text>
+
+  <rect x="390" y="380" width="400" height="180" class="box" fill="#ede7f6"/>
+  <text x="414" y="434" class="txt">MLP decoder head</text>
+  <text x="414" y="460" class="small">Linear(d_model → 2d_model) + GELU</text>
+  <text x="414" y="485" class="small">Linear(2d_model → H · d_z)</text>
+  <text x="414" y="510" class="shape">flat ∈ ℝ[B, H·d_z]</text>
+
+  <rect x="840" y="405" width="250" height="130" class="box" fill="#e0f7fa"/>
+  <text x="866" y="452" class="txt">Reshape</text>
+  <text x="866" y="477" class="shape">ŷ = flat.view(B, H, d_z)</text>
+  <text x="866" y="502" class="shape">ŷ ∈ ℝ[B, H, d_z]</text>
+
+  <rect x="1130" y="405" width="180" height="130" class="box" fill="#f1f8e9"/>
+  <text x="1156" y="458" class="txt">Forecast</text>
+  <text x="1156" y="484" class="shape">H future steps</text>
+
+  <path d="M280 180 L320 180" class="arrow"/>
+  <path d="M600 180 L640 180" class="arrow"/>
+  <path d="M1060 180 L1100 180" class="arrow"/>
+  <path d="M1215 240 L1215 320 L700 320 L700 420" class="arrow"/>
+  <path d="M790 470 L840 470" class="arrow"/>
+  <path d="M1090 470 L1130 470" class="arrow"/>
+
+  <text x="80" y="710" class="small">Key idea: process history with residual Mamba blocks, use final token state, and decode directly to H×d_z horizon tensor via MLP.</text>
+</svg>
