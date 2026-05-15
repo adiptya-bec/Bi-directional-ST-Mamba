@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1460" height="800" viewBox="0 0 1460 800">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1d3557"/>
+    </marker>
+    <style>
+      .title{font:700 30px Arial; fill:#0b132b}
+      .box{stroke:#1b263b; stroke-width:2; rx:14; ry:14}
+      .txt{font:600 18px Arial; fill:#0b132b}
+      .shape{font:500 15px Arial; fill:#1d3557}
+      .small{font:500 14px Arial; fill:#3d5a80}
+      .arrow{stroke:#1d3557; stroke-width:2.5; fill:none; marker-end:url(#arrow)}
+    </style>
+  </defs>
+
+  <text x="40" y="54" class="title">TransformerForecaster Architecture</text>
+
+  <rect x="40" y="110" width="230" height="120" class="box" fill="#e3f2fd"/>
+  <text x="60" y="154" class="txt">Input history</text>
+  <text x="60" y="180" class="shape">x ∈ ℝ[B, T_in, d_in]</text>
+
+  <rect x="300" y="90" width="330" height="160" class="box" fill="#e8f5e9"/>
+  <text x="325" y="140" class="txt">Input embedding</text>
+  <text x="325" y="166" class="small">Linear(d_in → d_model)</text>
+  <text x="325" y="191" class="small">+ Sinusoidal Positional Encoding</text>
+  <text x="325" y="216" class="shape">h ∈ ℝ[B, T_in, d_model]</text>
+
+  <rect x="670" y="80" width="380" height="180" class="box" fill="#fff8e1"/>
+  <text x="695" y="132" class="txt">Causal Transformer encoder stack (Pre-LN)</text>
+  <text x="695" y="158" class="small">repeat N_enc times:</text>
+  <text x="695" y="183" class="small">h ← h + MHA(LN(h), causal mask)</text>
+  <text x="695" y="208" class="small">h ← h + FFN(LN(h))</text>
+  <text x="695" y="233" class="shape">memory ∈ ℝ[B, T_in, d_model]</text>
+
+  <rect x="1090" y="90" width="330" height="160" class="box" fill="#fce4ec"/>
+  <text x="1115" y="140" class="txt">Future query embeddings</text>
+  <text x="1115" y="166" class="small">Learned query table Q_fut ∈ ℝ[H, d_model]</text>
+  <text x="1115" y="191" class="small">broadcast to batch</text>
+  <text x="1115" y="216" class="shape">q ∈ ℝ[B, H, d_model]</text>
+
+  <rect x="410" y="360" width="500" height="200" class="box" fill="#ede7f6"/>
+  <text x="435" y="420" class="txt">Transformer decoder stack with cross-attention</text>
+  <text x="435" y="446" class="small">repeat N_dec times:</text>
+  <text x="435" y="471" class="small">q ← q + SelfMHA(LN(q), causal mask_H)</text>
+  <text x="435" y="496" class="small">q ← q + CrossMHA(LN(q), memory)</text>
+  <text x="435" y="521" class="small">q ← q + FFN(LN(q))</text>
+  <text x="435" y="546" class="shape">dec ∈ ℝ[B, H, d_model]</text>
+
+  <rect x="960" y="390" width="260" height="130" class="box" fill="#e0f7fa"/>
+  <text x="988" y="436" class="txt">Output linear head</text>
+  <text x="988" y="461" class="small">Linear(d_model → d_z)</text>
+  <text x="988" y="486" class="shape">ŷ ∈ ℝ[B, H, d_z]</text>
+
+  <rect x="1260" y="390" width="160" height="130" class="box" fill="#f1f8e9"/>
+  <text x="1284" y="442" class="txt">Forecast</text>
+  <text x="1284" y="468" class="shape">H steps</text>
+
+  <path d="M270 170 L300 170" class="arrow"/>
+  <path d="M630 170 L670 170" class="arrow"/>
+  <path d="M1050 170 L1090 170" class="arrow"/>
+  <path d="M1255 250 L1255 320 L780 320 L780 400" class="arrow"/>
+  <path d="M860 260 L860 360" class="arrow"/>
+  <path d="M910 460 L960 460" class="arrow"/>
+  <path d="M1220 460 L1260 460" class="arrow"/>
+
+  <text x="90" y="740" class="small">Key idea: causal encoding of observed tokens, then decode H future latents via learned query embeddings and cross-attention to encoder memory.</text>
+</svg>
