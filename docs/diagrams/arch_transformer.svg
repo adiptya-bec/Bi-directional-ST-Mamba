@@ -1,0 +1,39 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='820' viewBox='0 0 1280 820'>
+<style>text{font-family:Arial,sans-serif;fill:#111} .t{font-size:28px;font-weight:700} .b{font-size:19px} .s{font-size:17px;fill:#2f2f2f} .box{fill:#f8fbff;stroke:#2b5d87;stroke-width:2;rx:14;ry:14} .note{fill:#fff7e6;stroke:#c08b2f;stroke-width:2;rx:12;ry:12}</style>
+<text x='40' y='52' class='t'>TransformerForecaster architecture</text>
+<rect x='20' y='120' width='180' height='90' class='box'/>
+<text x='34' y='150' class='b'>Input</text>
+<text x='34' y='174' class='s'>(B, L, d_z)</text>
+<rect x='230' y='120' width='190' height='90' class='box'/>
+<text x='244' y='150' class='b'>Input projection</text>
+<text x='244' y='174' class='s'>Linear d_z → d_model</text>
+<rect x='450' y='120' width='220' height='90' class='box'/>
+<text x='464' y='150' class='b'>Positional encoding</text>
+<text x='464' y='174' class='s'>context length L</text>
+<rect x='700' y='120' width='260' height='90' class='box'/>
+<text x='714' y='150' class='b'>Encoder stack</text>
+<text x='714' y='174' class='s'>Self-Attn + FFN</text>
+<text x='714' y='198' class='s'>Residual + LayerNorm</text>
+<rect x='990' y='120' width='250' height='90' class='box'/>
+<text x='1004' y='150' class='b'>Decoder stack</text>
+<text x='1004' y='174' class='s'>Self-Attn + Cross-Attn</text>
+<text x='1004' y='198' class='s'>Residual + LayerNorm</text>
+<rect x='355' y='280' width='560' height='90' class='box'/>
+<text x='369' y='310' class='b'>Output</text>
+<text x='369' y='334' class='s'>(B, H=pred_horizon, d_z) via output projection</text>
+<rect x='220' y='420' width='840' height='110' class='note'/>
+<text x='234' y='450' class='b'>Training/inference behavior</text>
+<text x='234' y='474' class='s'>Uses H query tokens and predicts whole horizon at once (non-autoregressive)</text>
+<line x1='200' y1='165.0' x2='230' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='220,159.0 230,165.0 220,171.0' fill='#1e4d74'/>
+<line x1='420' y1='165.0' x2='450' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='440,159.0 450,165.0 440,171.0' fill='#1e4d74'/>
+<line x1='670' y1='165.0' x2='700' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='690,159.0 700,165.0 690,171.0' fill='#1e4d74'/>
+<line x1='960' y1='165.0' x2='990' y2='165.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='980,159.0 990,165.0 980,171.0' fill='#1e4d74'/>
+<line x1='1240' y1='165.0' x2='355' y2='325.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='345,319.0 355,325.0 345,331.0' fill='#1e4d74'/>
+<line x1='915' y1='325.0' x2='220' y2='475.0' stroke='#1e4d74' stroke-width='2.5'/>
+<polygon points='210,469.0 220,475.0 210,481.0' fill='#1e4d74'/>
+</svg>
